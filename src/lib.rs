@@ -1,7 +1,7 @@
+use rand::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::console;
-
 
 // When the `wee_alloc` feature is enabled, this uses `wee_alloc` as the global
 // allocator.
@@ -11,7 +11,13 @@ use web_sys::console;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-fn draw_triangle(context: &web_sys::CanvasRenderingContext2d, points: [(f64, f64); 3]) {
+fn draw_triangle(
+    context: &web_sys::CanvasRenderingContext2d,
+    points: [(f64, f64); 3],
+    color: (u8, u8, u8),
+) {
+    let color_str = format!("rgb({}, {}, {})", color.0, color.1, color.2);
+    context.set_fill_style(&wasm_bindgen::JsValue::from_str(&color_str));
     let [top, left, right] = points;
     context.move_to(top.0, top.1);
     context.begin_path();
@@ -20,23 +26,36 @@ fn draw_triangle(context: &web_sys::CanvasRenderingContext2d, points: [(f64, f64
     context.line_to(top.0, top.1);
     context.close_path();
     context.stroke();
+    context.fill();
 }
 
 fn mid_point(point_1: (f64, f64), point_2: (f64, f64)) -> (f64, f64) {
     ((point_1.0 + point_2.0) / 2.0, (point_1.1 + point_2.1) / 2.0)
 }
 
-fn sierpinski(context: &web_sys::CanvasRenderingContext2d, points: [(f64, f64); 3], depth: u8) {
+fn sierpinski(
+    context: &web_sys::CanvasRenderingContext2d,
+    points: [(f64, f64); 3],
+    color: (u8, u8, u8),
+    depth: u8,
+) {
     let [top, left, right] = points;
-    draw_triangle(context, points);
+    draw_triangle(context, points, color);
     let depth = depth - 1;
     if depth > 0 {
+        let mut rng = thread_rng();
+        let next_color = (
+            rng.gen_range(0..255),
+            rng.gen_range(0..255),
+            rng.gen_range(0..255),
+        );
+
         let left_middle = mid_point(top, left);
         let right_middle = mid_point(top, right);
         let bottom_middle = mid_point(left, right);
-        sierpinski(context, [top, left_middle, right_middle], depth);
-        sierpinski(context, [left_middle, left, bottom_middle], depth);
-        sierpinski(context, [right_middle, bottom_middle, right], depth);
+        sierpinski(context, [top, left_middle, right_middle], next_color, depth);
+        sierpinski(context, [left_middle, left, bottom_middle], next_color, depth);
+        sierpinski(context, [right_middle, bottom_middle, right], next_color, depth);
     }
 }
 
@@ -48,17 +67,16 @@ pub fn main_js() -> Result<(), JsValue> {
     // #[cfg(debug_assertions)]
     console_error_panic_hook::set_once();
 
-    
     // Your code goes here!
     console::log_1(&JsValue::from_str("Web Assembly!!"));
-    
+
     let window = web_sys::window().unwrap();
     let document = window.document().unwrap();
     let canvas = document
         .get_element_by_id("canvas")
-	    .unwrap()
+        .unwrap()
         .dyn_into::<web_sys::HtmlCanvasElement>()
-    	.unwrap();
+        .unwrap();
 
     let context = canvas
         .get_context("2d")
@@ -66,9 +84,9 @@ pub fn main_js() -> Result<(), JsValue> {
         .unwrap()
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
-    
+
     // draw_triangle(&context, [(300.0, 0.0), (0.0, 600.0), (600.0, 600.0)]);
-    sierpinski(&context, [(300.0, 0.0), (0.0, 600.0), (600.0, 600.0)], 10);
-    
+    sierpinski(&context, [(300.0, 0.0), (0.0, 600.0), (600.0, 600.0)], (0, 255, 0), 10);
+
     Ok(())
 }
