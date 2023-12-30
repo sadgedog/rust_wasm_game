@@ -1,3 +1,4 @@
+use std::{collections::HashMap, rc::Rc, sync::Mutex};
 use rand::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -54,8 +55,18 @@ fn sierpinski(
         let right_middle = mid_point(top, right);
         let bottom_middle = mid_point(left, right);
         sierpinski(context, [top, left_middle, right_middle], next_color, depth);
-        sierpinski(context, [left_middle, left, bottom_middle], next_color, depth);
-        sierpinski(context, [right_middle, bottom_middle, right], next_color, depth);
+        sierpinski(
+            context,
+            [left_middle, left, bottom_middle],
+            next_color,
+            depth,
+        );
+        sierpinski(
+            context,
+            [right_middle, bottom_middle, right],
+            next_color,
+            depth,
+        );
     }
 }
 
@@ -85,8 +96,41 @@ pub fn main_js() -> Result<(), JsValue> {
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .unwrap();
 
-    // draw_triangle(&context, [(300.0, 0.0), (0.0, 600.0), (600.0, 600.0)]);
-    sierpinski(&context, [(300.0, 0.0), (0.0, 600.0), (600.0, 600.0)], (0, 255, 0), 10);
+
+    wasm_bindgen_futures::spawn_local(async move {
+        let (success_tx, success_rx) = futures::channel::oneshot::channel::<Result<(), JsValue>>();
+        let success_tx = Rc::new(Mutex::new(Some(success_tx)));
+        let error_tx = Rc::clone(&success_tx);
+        let image = web_sys::HtmlImageElement::new().unwrap();
+        let callback = Closure::once(move || {
+            if let Some(success_tx) = success_tx.lock().ok().and_then(|mut opt| opt.take()) {
+                success_tx.send(Ok(()));
+            };
+            web_sys::console::log_1(&JsValue::from_str("loaded"));
+        });
+
+        let error_callback = Closure::once(move |err| {
+            if let Some(error_tx) = error_tx.lock().ok().and_then(|mut opt| opt.take()) {
+                error_tx.send(Err(err));
+            };
+        });
+
+        image.set_onload(Some(callback.as_ref().unchecked_ref()));
+        image.set_onerror(Some(error_callback.as_ref().unchecked_ref()));
+        image.set_src("Idle (1).png");
+        
+        success_rx.await;
+        context.draw_image_with_html_image_element(&image, 0.0, 0.0);
+    
+        // draw_triangle(&context, [(300.0, 0.0), (0.0, 600.0), (600.0, 600.0)]);
+        sierpinski(
+            &context,
+            [(300.0, 0.0), (0.0, 600.0), (600.0, 600.0)],
+            (0, 255, 0),
+            5,
+        );    
+    });
+
 
     Ok(())
 }
