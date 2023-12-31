@@ -1,4 +1,6 @@
-use rand::prelude::*;
+#[macro_use]
+mod browser;
+
 use serde::Deserialize;
 use std::{collections::HashMap, rc::Rc, sync::Mutex};
 use wasm_bindgen::prelude::*;
@@ -45,10 +47,7 @@ async fn fetch_json(json_path: &str) -> Result<JsValue, JsValue> {
 pub fn main_js() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
-    console::log_1(&JsValue::from_str("Hello Web Assembly!"));
-
-    let window = web_sys::window().unwrap();
-    let document = window.document().unwrap();
+    let document = browser::document().expect("No Document Found");
     let canvas = document
         .get_element_by_id("canvas")
         .unwrap()
@@ -71,29 +70,27 @@ pub fn main_js() -> Result<(), JsValue> {
             .into_serde()
             .expect("Could not convert rhb.json into a Sheet structure");
 
-        let image = web_sys::HtmlImageElement::new().unwrap();
-
         let (success_tx, success_rx) = futures::channel::oneshot::channel::<Result<(), JsValue>>();
         let success_tx = Rc::new(Mutex::new(Some(success_tx)));
         let error_tx = Rc::clone(&success_tx);
         let image = web_sys::HtmlImageElement::new().unwrap();
         let callback = Closure::once(move || {
             if let Some(success_tx) = success_tx.lock().ok().and_then(|mut opt| opt.take()) {
-                success_tx.send(Ok(()));
+                let _ = success_tx.send(Ok(()));
             };
             web_sys::console::log_1(&JsValue::from_str("loaded"));
         });
 
         let error_callback = Closure::once(move |err| {
             if let Some(error_tx) = error_tx.lock().ok().and_then(|mut opt| opt.take()) {
-                error_tx.send(Err(err));
+                let _ = error_tx.send(Err(err));
             };
         });
 
         image.set_onload(Some(callback.as_ref().unchecked_ref()));
         image.set_onerror(Some(error_callback.as_ref().unchecked_ref()));
         image.set_src("rhb.png");
-        success_rx.await;
+        let _ = success_rx.await;
 
         let mut frame = -1;
         let interval_callback = Closure::wrap(Box::new(move || {
@@ -101,27 +98,30 @@ pub fn main_js() -> Result<(), JsValue> {
             let frame_name = format!("Run ({}).png", frame + 1);
             context.clear_rect(0.0, 0.0, 600.0, 600.0);
             let sprite = sheet.frames.get(&frame_name).expect("Cekk not found");
-            context.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
-                &image,
-                sprite.frame.x.into(),
-                sprite.frame.y.into(),
-                sprite.frame.w.into(),
-                sprite.frame.h.into(),
-                300.0,
-                300.0,
-                sprite.frame.w.into(),
-                sprite.frame.h.into(),
-            );
-    
+            context
+                .draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                    &image,
+                    sprite.frame.x.into(),
+                    sprite.frame.y.into(),
+                    sprite.frame.w.into(),
+                    sprite.frame.h.into(),
+                    300.0,
+                    300.0,
+                    sprite.frame.w.into(),
+                    sprite.frame.h.into(),
+                )
+                .expect("Could not draw sprite");
         }) as Box<dyn FnMut()>);
 
-        window.set_interval_with_callback_and_timeout_and_arguments_0(
-            interval_callback.as_ref().unchecked_ref(),
-            50,
-        );
-        
-        interval_callback.forget();
+        browser::window()
+            .unwrap()
+            .set_interval_with_callback_and_timeout_and_arguments_0(
+                interval_callback.as_ref().unchecked_ref(),
+                50,
+            )
+            .expect("Could not set interval");
 
+        interval_callback.forget();
     });
 
     Ok(())
