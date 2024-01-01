@@ -54,19 +54,12 @@ pub fn main_js() -> Result<(), JsValue> {
         .dyn_into::<web_sys::HtmlCanvasElement>()
         .unwrap();
 
-    let context = canvas
-        .get_context("2d")
-        .unwrap()
-        .unwrap()
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .unwrap();
+    let context = browser::context().expect("Could not get browser context");
 
-    wasm_bindgen_futures::spawn_local(async move {
-        let json = fetch_json("rhb.json")
+    browser::spawn_local(async move {
+        let sheet: Sheet = browser::fetch_json("rhb.json")
             .await
-            .expect("Could not fetch rhb.json");
-
-        let sheet: Sheet = json
+            .expect("Could not fetch rhb.json")
             .into_serde()
             .expect("Could not convert rhb.json into a Sheet structure");
 
