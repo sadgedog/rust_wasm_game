@@ -1,5 +1,6 @@
 #[macro_use]
 mod browser;
+mod engine;
 
 use serde::Deserialize;
 use std::{collections::HashMap, rc::Rc, sync::Mutex};
@@ -33,15 +34,6 @@ struct Cell {
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-async fn fetch_json(json_path: &str) -> Result<JsValue, JsValue> {
-    let window = web_sys::window().unwrap();
-    // await? : Result<JsValue, JsValue> -> JsValue
-    let resp_value = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(json_path)).await?;
-    let resp: web_sys::Response = resp_value.dyn_into()?;
-
-    wasm_bindgen_futures::JsFuture::from(resp.json()?).await
-}
-
 // This is like the `main` function, except for JavaScript.
 #[wasm_bindgen(start)]
 pub fn main_js() -> Result<(), JsValue> {
@@ -63,34 +55,16 @@ pub fn main_js() -> Result<(), JsValue> {
             .into_serde()
             .expect("Could not convert rhb.json into a Sheet structure");
 
-        let (success_tx, success_rx) = futures::channel::oneshot::channel::<Result<(), JsValue>>();
-        let success_tx = Rc::new(Mutex::new(Some(success_tx)));
-        let error_tx = Rc::clone(&success_tx);
-        let image = web_sys::HtmlImageElement::new().unwrap();
-        let callback = Closure::once(move || {
-            if let Some(success_tx) = success_tx.lock().ok().and_then(|mut opt| opt.take()) {
-                let _ = success_tx.send(Ok(()));
-            };
-            web_sys::console::log_1(&JsValue::from_str("loaded"));
-        });
-
-        let error_callback = Closure::once(move |err| {
-            if let Some(error_tx) = error_tx.lock().ok().and_then(|mut opt| opt.take()) {
-                let _ = error_tx.send(Err(err));
-            };
-        });
-
-        image.set_onload(Some(callback.as_ref().unchecked_ref()));
-        image.set_onerror(Some(error_callback.as_ref().unchecked_ref()));
-        image.set_src("rhb.png");
-        let _ = success_rx.await;
+        let image = engine::load_image("rhb.png")
+            .await
+            .expect("Could not load rhb.png");
 
         let mut frame = -1;
         let interval_callback = Closure::wrap(Box::new(move || {
             frame = (frame + 1) % 8;
             let frame_name = format!("Run ({}).png", frame + 1);
             context.clear_rect(0.0, 0.0, 600.0, 600.0);
-            let sprite = sheet.frames.get(&frame_name).expect("Cekk not found");
+            let sprite = sheet.frames.get(&frame_name).expect("Cell not found");
             context
                 .draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
                     &image,
