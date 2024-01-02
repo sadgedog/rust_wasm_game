@@ -22,12 +22,12 @@ pub struct SheetRect {
     pub h: i16,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Cell {
     pub frame: SheetRect,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Sheet {
     pub frames: HashMap<String, Cell>,
 }
