@@ -1,28 +1,12 @@
-use crate::engine::{Game, KeyState, Point, Rect, Renderer};
-use crate::{browser, engine};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use serde::Deserialize;
-use std::collections::HashMap;
 use web_sys::HtmlImageElement;
 
-#[derive(Deserialize)]
-pub struct SheetRect {
-    pub x: i16,
-    pub y: i16,
-    pub w: i16,
-    pub h: i16,
-}
-
-#[derive(Deserialize)]
-pub struct Cell {
-    pub frame: SheetRect,
-}
-
-#[derive(Deserialize)]
-pub struct Sheet {
-    pub frames: HashMap<String, Cell>,
-}
+use self::red_hat_boy_states::*;
+use crate::{
+    browser,
+    engine::{self, Game, KeyState, Point, Rect, Renderer, Sheet},
+};
 
 pub struct WalkTheDog {
     image: Option<HtmlImageElement>,
@@ -58,17 +42,18 @@ impl Game for WalkTheDog {
 
     fn update(&mut self, keystate: &KeyState) {
         let mut velocity = Point { x: 0, y: 0 };
+        log!("Position: {}, {}", self.position.x, self.position.y);
         if keystate.is_pressed("ArrowDown") {
-            velocity.y += 3;
+            velocity.y += 5;
         }
         if keystate.is_pressed("ArrowUp") {
-            velocity.y -= 3;
+            velocity.y -= 5;
         }
         if keystate.is_pressed("ArrowRight") {
-            velocity.x += 3;
+            velocity.x += 5;
         }
         if keystate.is_pressed("ArrowLeft") {
-            velocity.x -= 3;
+            velocity.x -= 5;
         }
         self.position.x += velocity.x;
         self.position.y += velocity.y;
@@ -112,4 +97,67 @@ impl Game for WalkTheDog {
             );
         });
     }
+}
+
+#[derive(Copy, Clone)]
+enum RedHatBoyStateMachine {
+    Idle(RedHatBoyState<Idle>),
+    Running(RedHatBoyState<Running>),
+}
+
+pub enum Event {
+    Run,
+}
+
+impl RedHatBoyStateMachine {
+    fn transition(self, event: Event) -> Self {
+        match (self, event) {
+            (RedHatBoyStateMachine::Idle(state), Event::Run) => state.run().into(),
+            _ => self,
+        }
+    }
+}
+
+impl From<RedHatBoyState<Running>> for RedHatBoyStateMachine {
+    fn from(state: RedHatBoyState<Running>) -> Self {
+        RedHatBoyStateMachine::Running(state)
+    }
+}
+
+pub struct RedHatBoy {
+    state_machine: RedHatBoyStateMachine,
+    sprite_sheet: Sheet,
+    image: HtmlImageElement,
+}
+
+mod red_hat_boy_states {
+    use crate::engine::Point;
+
+    #[derive(Copy, Clone)]
+    pub struct RedHatBoyState<S> {
+        context: RedHatBoyContext,
+        _state: S,
+    }
+
+    #[derive(Copy, Clone)]
+    pub struct RedHatBoyContext {
+        frame: u8,
+        position: Point,
+        velocity: Point,
+    }
+
+    #[derive(Copy, Clone)]
+    pub struct Idle;
+
+    impl RedHatBoyState<Idle> {
+        pub fn run(self) -> RedHatBoyState<Running> {
+            RedHatBoyState {
+                context: self.context,
+                _state: Running {},
+            }
+        }
+    }
+
+    #[derive(Copy, Clone)]
+    pub struct Running;
 }

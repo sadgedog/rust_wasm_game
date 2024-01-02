@@ -8,10 +8,29 @@ use futures::{
     },
     SinkExt,
 };
+use serde::Deserialize;
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Mutex};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlImageElement, KeyboardEvent};
+
+#[derive(Deserialize, Clone)]
+pub struct SheetRect {
+    pub x: i16,
+    pub y: i16,
+    pub w: i16,
+    pub h: i16,
+}
+
+#[derive(Deserialize)]
+pub struct Cell {
+    pub frame: SheetRect,
+}
+
+#[derive(Deserialize)]
+pub struct Sheet {
+    pub frames: HashMap<String, Cell>,
+}
 
 pub struct Rect {
     pub x: f32,
