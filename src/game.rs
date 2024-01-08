@@ -83,10 +83,12 @@ impl RedHatBoyStateMachine {
     fn transition(self, event: Event) -> Self {
         match (self, event) {
             (RedHatBoyStateMachine::Idle(state), Event::Run) => state.run().into(),
+            (RedHatBoyStateMachine::Running(state), Event::Jump) => state.jump().into(),
             (RedHatBoyStateMachine::Running(state), Event::Slide) => state.slide().into(),
             (RedHatBoyStateMachine::Idle(state), Event::Update) => state.update().into(),
             (RedHatBoyStateMachine::Running(state), Event::Update) => state.update().into(),
             (RedHatBoyStateMachine::Sliding(state), Event::Update) => state.update().into(),
+            (RedHatBoyStateMachine::Jumping(state), Event::Update) => state.update().into(),
             _ => self,
         }
     }
@@ -126,6 +128,15 @@ impl From<RedHatBoyState<Sliding>> for RedHatBoyStateMachine {
     }
 }
 
+impl From<SlidingEndState> for RedHatBoyStateMachine {
+    fn from(end_state: SlidingEndState) -> Self {
+        match end_state {
+            SlidingEndState::Complete(running_state) => running_state.into(),
+            SlidingEndState::Sliding(sliding_state) => sliding_state.into(),
+        }
+    }
+}
+
 impl From<RedHatBoyState<Idle>> for RedHatBoyStateMachine {
     fn from(state: RedHatBoyState<Idle>) -> Self {
         RedHatBoyStateMachine::Idle(state)
@@ -138,11 +149,11 @@ impl From<RedHatBoyState<Jumping>> for RedHatBoyStateMachine {
     }
 }
 
-impl From<SlidingEndState> for RedHatBoyStateMachine {
-    fn from(end_state: SlidingEndState) -> Self {
-        match end_state {
-            SlidingEndState::Complete(running_state) => running_state.into(),
-            SlidingEndState::Sliding(sliding_state) => sliding_state.into(),
+impl From<JumpingEndState> for RedHatBoyStateMachine {
+    fn from(state: JumpingEndState) -> Self {
+        match state {
+            JumpingEndState::Jumping(jumping) => jumping.into(),
+            JumpingEndState::Landing(landing) => landing.into(),
         }
     }
 }
@@ -217,6 +228,7 @@ mod red_hat_boy_states {
     const SLIDING_FRAMES: u8 = 14;
     const JUMPING_FRAMES: u8 = 35;
     const RUNNING_SPEED: i16 = 3;
+    const JUMP_SPEED: i16 = -25;
     const IDLE_FRAME_NAME: &str = "Idle";
     const RUN_FRAME_NAME: &str = "Run";
     const SLIDING_FRAME_NAME: &str = "Slide";
@@ -285,6 +297,13 @@ mod red_hat_boy_states {
             RedHatBoyState {
                 context: self.context.reset_frame(),
                 _state: Sliding {},
+            }
+        }
+
+        pub fn jump(self) -> RedHatBoyState<Jumping> {
+            RedHatBoyState {
+                context: self.context.reset_frame().set_vertical_velocity(JUMP_SPEED),
+                _state: Jumping {},
             }
         }
 
@@ -375,6 +394,11 @@ mod red_hat_boy_states {
 
         fn run_right(mut self) -> Self {
             self.velocity.x += RUNNING_SPEED;
+            self
+        }
+
+        fn set_vertical_velocity(mut self, y: i16) -> Self {
+            self.velocity.y = y;
             self
         }
     }
