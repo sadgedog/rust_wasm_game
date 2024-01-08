@@ -229,6 +229,7 @@ mod red_hat_boy_states {
     const JUMPING_FRAMES: u8 = 35;
     const RUNNING_SPEED: i16 = 3;
     const JUMP_SPEED: i16 = -25;
+    const GRAVITY: i16 = 1;
     const IDLE_FRAME_NAME: &str = "Idle";
     const RUN_FRAME_NAME: &str = "Run";
     const SLIDING_FRAME_NAME: &str = "Slide";
@@ -376,6 +377,7 @@ mod red_hat_boy_states {
 
     impl RedHatBoyContext {
         fn update(mut self, frame_count: u8) -> Self {
+            self.velocity.y += GRAVITY;
             if self.frame < frame_count {
                 self.frame += 1;
             } else {
@@ -384,6 +386,9 @@ mod red_hat_boy_states {
 
             self.position.x += self.velocity.x;
             self.position.y += self.velocity.y;
+            if self.position.y > FLOOR {
+                self.position.y = FLOOR;
+            }
             self
         }
 
